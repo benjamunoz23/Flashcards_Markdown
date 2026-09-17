@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flashcards AI - Carpetas y Repaso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    .perspective { perspective: 1000px; }
+    .transform-style-3d { transform-style: preserve-3d; }
+    .backface-hidden { backface-visibility: hidden; }
+    .rotate-y-180 { transform: rotateY(180deg); }
+    /* Transiciones suaves para los menús */
+    .fade-enter { opacity: 0; transform: translateY(10px); transition: all 0.4s ease; }
+    .fade-enter-active { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans selection:bg-indigo-500 selection:text-white">
+
+  <!-- Navegación superior -->
+  <nav class="bg-slate-800 border-b border-slate-700 p-4 sticky top-0 z-50">
+    <div class="max-w-5xl mx-auto flex justify-between items-center">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="showDashboard()">
+        <i class="fa-solid fa-layer-group text-indigo-400 text-2xl"></i>
+        <h1 class="text-xl font-bold tracking-tight text-white hover:text-indigo-300 transition-colors">Flashcards AI</h1>
+      </div>
+      <button onclick="showDashboard()" class="text-sm font-medium text-slate-300 hover:text-white transition-colors">
+        <i class="fa-solid fa-house mr-1"></i> Inicio
+      </button>
+    </div>
+  </nav>
+
+  <div class="max-w-5xl mx-auto p-6 space-y-8 mt-4">
+    
+    <!-- ==========================================
+         VISTA 1: DASHBOARD (CARPETAS Y CARGA)
+         ========================================== -->
+    <div id="dashboardView" class="space-y-8 fade-enter fade-enter-active">
+      
+      <!-- Configuración API -->
+      <section class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg">
+        <label class="block text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+          <i class="fa-solid fa-key mr-1"></i> API Key de Google Gemini
+        </label>
+        <input type="password" id="apiKey" placeholder="AIzaSy... o AQ.Ab8..." class="w-full p-3 rounded-lg bg-slate-900 border border-slate-600 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all">
+        <p class="text-xs text-slate-500 mt-2">Tu clave se usa localmente, nunca se envía a servidores de terceros.</p>
+      </section>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <!-- Columna Izquierda: Mis Carpetas -->
+        <section class="space-y-4">
+          <h2 class="text-lg font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-folder-open text-indigo-400"></i> Mis Carpetas de Estudio
+          </h2>
+          <div id="decksContainer" class="grid grid-cols-1 gap-3 overflow-y-auto max-h-[500px] pr-2">
+            <!-- Las carpetas se renderizan aquí dinámicamente -->
+            <div class="text-slate-500 text-sm italic py-4">No tienes carpetas aún. Sube un archivo para crear una.</div>
+          </div>
+        </section>
+
+        <!-- Columna Derecha: Crear nueva carpeta (Importar .md) -->
+        <section class="bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-lg h-fit space-y-4">
+          <h2 class="text-lg font-bold text-white mb-4">Crear Nueva Carpeta</h2>
+          
+          <div id="dropZone" class="border-2 border-dashed border-slate-600 hover:border-indigo-500 hover:bg-slate-700/50 rounded-xl p-8 text-center cursor-pointer transition-all group">
+            <input type="file" id="fileInput" accept=".md,.txt" class="hidden" onchange="handleFileSelect(event)">
+            <div class="bg-slate-900 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform">
+              <i class="fa-solid fa-file-arrow-up text-2xl text-indigo-400"></i>
+            </div>
+            <p class="text-sm text-slate-200 font-medium mb-1">Haz clic o arrastra tu archivo .md aquí</p>
+            <p class="text-xs text-slate-400">Soporta Markdown y TXT</p>
+            <p id="fileName" class="text-xs text-indigo-400 mt-4 font-mono font-bold bg-slate-900 inline-block px-3 py-1 rounded-full hidden"></p>
+          </div>
+
+          <textarea id="prompt" rows="3" class="hidden"></textarea>
+
+          <button id="generateBtn" onclick="generateCards()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span>Generar Tarjetas</span>
+          </button>
+          
+          <div id="loader" class="hidden text-center py-4 text-indigo-400 animate-pulse font-medium text-sm">
+            <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Analizando documento con Gemini 3.6...
+          </div>
+        </section>
+      </div>
+    </div>
+
+
+    <!-- ==========================================
+         VISTA 2: MODO ESTUDIO (FLASHCARDS)
+         ========================================== -->
+    <div id="studyView" class="hidden space-y-6 fade-enter fade-enter-active max-w-2xl mx-auto">
+      
+      <!-- Cabecera de estudio -->
+      <div class="flex justify-between items-end mb-2">
+        <div>
+          <button onclick="showDashboard()" class="text-slate-400 hover:text-white text-sm mb-2 transition-colors">
+            <i class="fa-solid fa-arrow-left mr-1"></i> Volver a carpetas
+          </button>
+          <h2 id="studyDeckTitle" class="text-2xl font-bold text-white flex items-center gap-2">
+            <i class="fa-solid fa-folder text-indigo-400"></i> Nombre del Documento
+          </h2>
+        </div>
+        <div class="text-right">
+          <span id="counter" class="text-sm font-bold bg-slate-800 text-indigo-300 px-3 py-1 rounded-full border border-slate-700">1 / 10</span>
+        </div>
+      </div>
+
+      <!-- Barra de progreso -->
+      <div class="w-full bg-slate-800 rounded-full h-2 mb-6 overflow-hidden">
+        <div id="progressBar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width: 10%"></div>
+      </div>
+
+      <!-- Tarjeta 3D -->
+      <div class="perspective h-80 w-full cursor-pointer group" onclick="flipCard()">
+        <div id="cardInner" class="relative w-full h-full transform-style-3d transition-transform duration-500 rounded-3xl shadow-2xl">
+          
+          <!-- Frente (Pregunta) -->
+          <div class="absolute w-full h-full backface-hidden bg-slate-800 border-2 border-slate-700 group-hover:border-indigo-500/50 transition-colors rounded-3xl p-8 flex flex-col justify-center items-center text-center">
+            <span class="absolute top-6 left-6 text-xs font-bold text-slate-500 uppercase tracking-widest"><i class="fa-regular fa-circle-question mr-1"></i> Concepto</span>
+            <span class="absolute top-6 right-6 text-xs text-slate-500 animate-bounce"><i class="fa-solid fa-hand-pointer"></i> Voltear</span>
+            <p id="cardQuestion" class="text-2xl font-semibold text-slate-100 leading-snug"></p>
+          </div>
+          
+          <!-- Reverso (Respuesta) -->
+          <div class="absolute w-full h-full backface-hidden rotate-y-180 bg-indigo-950 border-2 border-indigo-500 rounded-3xl p-8 flex flex-col justify-center items-center text-center">
+            <span class="absolute top-6 left-6 text-xs font-bold text-indigo-300 uppercase tracking-widest"><i class="fa-solid fa-lightbulb mr-1"></i> Definición</span>
+            <div class="overflow-y-auto max-h-full w-full px-2 scrollbar-hide">
+              <p id="cardAnswer" class="text-lg text-indigo-50 leading-relaxed"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Controles de Evaluación (Semáforo) -->
+      <div id="ratingControls" class="grid grid-cols-3 gap-4 pt-6 opacity-50 pointer-events-none transition-opacity duration-300">
+        <button onclick="rateCard('red', event)" class="flex flex-col items-center justify-center gap-1 py-4 bg-slate-800 hover:bg-red-950/50 border border-slate-700 hover:border-red-500 rounded-2xl transition-all group">
+          <div class="w-8 h-8 rounded-full bg-red-500/20 text-red-500 flex items-center justify-center group-hover:bg-red-500 group-hover:text-white transition-colors">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </div>
+          <span class="text-xs font-bold text-slate-300 mt-1 uppercase tracking-wider">No lo sé</span>
+        </button>
+        
+        <button onclick="rateCard('yellow', event)" class="flex flex-col items-center justify-center gap-1 py-4 bg-slate-800 hover:bg-amber-950/50 border border-slate-700 hover:border-amber-500 rounded-2xl transition-all group">
+          <div class="w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 flex items-center justify-center group-hover:bg-amber-500 group-hover:text-white transition-colors">
+            <i class="fa-solid fa-minus text-lg"></i>
+          </div>
+          <span class="text-xs font-bold text-slate-300 mt-1 uppercase tracking-wider">Dudé</span>
+        </button>
+        
+        <button onclick="rateCard('green', event)" class="flex flex-col items-center justify-center gap-1 py-4 bg-slate-800 hover:bg-emerald-950/50 border border-slate-700 hover:border-emerald-500 rounded-2xl transition-all group">
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-colors">
+            <i class="fa-solid fa-check text-lg"></i>
+          </div>
+          <span class="text-xs font-bold text-slate-300 mt-1 uppercase tracking-wider">Fácil</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <script type="module">
+    import { GoogleGenAI, Type } from "https://esm.run/@google/genai";
+
+    // --- ESTADO DE LA APLICACIÓN ---
+    let decks = JSON.parse(localStorage.getItem('flashcard_decks')) || {};
+    let currentDeckName = "";
+    let currentCards = [];
+    let currentIndex = 0;
+    let isFlipped = false;
+    let currentFileName = "Mi Nuevo Documento";
+
+    // --- INICIALIZACIÓN ---
+    document.addEventListener('DOMContentLoaded', () => {
+      renderDecks();
+      // Restaurar API Key si existe
+      const savedKey = localStorage.getItem('gemini_api_key');
+      if (savedKey) document.getElementById('apiKey').value = savedKey;
+    });
+
+    // --- DRAG & DROP Y SELECCIÓN DE ARCHIVO ---
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('border-indigo-500', 'bg-slate-700/50');
+    });
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('border-indigo-500', 'bg-slate-700/50');
+    });
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('border-indigo-500', 'bg-slate-700/50');
+      if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+    });
+    window.handleFileSelect = (e) => {
+      if (e.target.files.length > 0) processFile(e.target.files[0]);
+    };
+
+    function processFile(file) {
+      if (!file.name.endsWith('.md') && !file.name.endsWith('.txt')) {
+        alert("Formato no válido. Usa .md o .txt");
+        return;
+      }
+      
+      // Limpiar extensión para el nombre de la carpeta
+      currentFileName = file.name.replace(/\.[^/.]+$/, "");
+      
+      const fileNameEl = document.getElementById('fileName');
+      fileNameEl.innerHTML = `<i class="fa-solid fa-file-code mr-1"></i> ${file.name} listo para procesar`;
+      fileNameEl.classList.remove('hidden');
+
+      const reader = new FileReader();
+      reader.onload = (e) => { document.getElementById('prompt').value = e.target.result; };
+      reader.readAsText(file);
+    }
+
+    // --- CONEXIÓN CON GEMINI ---
+    window.generateCards = async function() {
+      const apiKey = document.getElementById("apiKey").value.trim();
+      const promptText = document.getElementById("prompt").value.trim();
+
+      if (!apiKey) return alert("Ingresa tu API Key de Gemini.");
+      if (!promptText) return alert("Sube un archivo Markdown primero.");
+
+      // Guardar API Key localmente por comodidad
+      localStorage.setItem('gemini_api_key', apiKey);
+
+      const loader = document.getElementById("loader");
+      const btn = document.getElementById("generateBtn");
+
+      loader.classList.remove("hidden");
+      btn.classList.add("hidden");
+
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+
+        // AVISO: Usando el modelo actualizado 3.6-flash
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.6-flash',
+          contents: `A continuación tienes un documento estructurado. Extrae todos los conceptos principales y transfórmalos en flashcards:\n\n${promptText}`,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              description: "Lista de flashcards",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  pregunta: { type: Type.STRING },
+                  respuesta: { type: Type.STRING }
+                },
+                required: ["pregunta", "respuesta"]
+              }
+            }
+          }
+        });
+
+        const newCards = JSON.parse(response.text);
+        
+        if (newCards.length > 0) {
+          // Inicializar estado de las tarjetas nuevas
+          const processedCards = newCards.map(c => ({ ...c, status: 'new' }));
+          
+          // Guardar nueva carpeta
+          decks[currentFileName] = processedCards;
+          saveDecks();
+          renderDecks();
+          
+          // Limpiar formulario y empezar a estudiar
+          document.getElementById('prompt').value = '';
+          document.getElementById('fileName').classList.add('hidden');
+          startStudy(currentFileName);
+        } else {
+          alert("No se encontraron conceptos en el archivo.");
+        }
+      } catch (error) {
+        console.error(error);
+        alert("Error de API. Asegúrate de usar una clave válida (AIzaSy... o AQ...). Revisa la consola.");
+      } finally {
+        loader.classList.add("hidden");
+        btn.classList.remove("hidden");
+      }
+    };
+
+    // --- GESTIÓN DE CARPETAS ---
+    function saveDecks() {
+      localStorage.setItem('flashcard_decks', JSON.stringify(decks));
+    }
+
+    function renderDecks() {
+      const container = document.getElementById('decksContainer');
+      container.innerHTML = '';
+      
+      const deckNames = Object.keys(decks);
+      if (deckNames.length === 0) {
+        container.innerHTML = '<div class="text-slate-500 text-sm italic py-4">Sube un archivo para crear tu primera carpeta de estudio.</div>';
+        return;
+      }
+
+      deckNames.reverse().forEach(name => {
+        const totalCards = decks[name].length;
+        const mastered = decks[name].filter(c => c.status === 'green').length;
+        const progress = Math.round((mastered / totalCards) * 100) || 0;
+
+        const el = document.createElement('div');
+        el.className = "bg-slate-800 border border-slate-700 p-4 rounded-xl hover:border-indigo-500 hover:bg-slate-750 transition-all cursor-pointer flex justify-between items-center group";
+        el.innerHTML = `
+          <div class="flex items-center gap-4 flex-1" onclick="startStudy('${name}')">
+            <div class="bg-indigo-500/20 w-10 h-10 rounded-lg flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+              <i class="fa-solid fa-layer-group"></i>
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-100 text-sm">${name}</h3>
+              <p class="text-xs text-slate-400 mt-1">${totalCards} tarjetas • ${progress}% dominado</p>
+            </div>
+          </div>
+          <button onclick="deleteDeck('${name}', event)" class="w-8 h-8 rounded-full hover:bg-red-500/20 text-slate-600 hover:text-red-400 transition-colors flex items-center justify-center">
+            <i class="fa-solid fa-trash-can text-sm"></i>
+          </button>
+        `;
+        container.appendChild(el);
+      });
+    }
+
+    window.deleteDeck = function(name, event) {
+      event.stopPropagation(); // Evitar que se abra la carpeta
+      if(confirm(`¿Seguro que quieres borrar la carpeta "${name}"?`)) {
+        delete decks[name];
+        saveDecks();
+        renderDecks();
+      }
+    };
+
+    // --- MODO ESTUDIO ---
+    window.showDashboard = function() {
+      document.getElementById('studyView').classList.add('hidden');
+      document.getElementById('dashboardView').classList.remove('hidden');
+      renderDecks(); // Refrescar progreso
+    };
+
+    window.startStudy = function(deckName) {
+      currentDeckName = deckName;
+      currentCards = decks[deckName];
+      currentIndex = 0;
+      
+      document.getElementById('dashboardView').classList.add('hidden');
+      document.getElementById('studyView').classList.remove('hidden');
+      document.getElementById('studyDeckTitle').innerHTML = `<i class="fa-solid fa-folder-open text-indigo-400"></i> ${deckName}`;
+      
+      showCard(currentIndex);
+    };
+
+    function showCard(index) {
+      isFlipped = false;
+      document.getElementById("cardInner").classList.remove("rotate-y-180");
+      document.getElementById("cardQuestion").innerText = currentCards[index].pregunta;
+      document.getElementById("cardAnswer").innerText = currentCards[index].respuesta;
+      
+      // Actualizar UI
+      document.getElementById("counter").innerText = `${index + 1} / ${currentCards.length}`;
+      const progressPercent = ((index + 1) / currentCards.length) * 100;
+      document.getElementById("progressBar").style.width = `${progressPercent}%`;
+
+      // Ocultar botones de calificación hasta voltear
+      document.getElementById("ratingControls").classList.add("opacity-50", "pointer-events-none");
+    }
+
+    window.flipCard = function() {
+      if(!isFlipped) {
+        isFlipped = true;
+        document.getElementById("cardInner").classList.add("rotate-y-180");
+        // Habilitar controles de evaluación (rojo, amarillo, verde)
+        document.getElementById("ratingControls").classList.remove("opacity-50", "pointer-events-none");
+      }
+    };
+
+    // Función del Semáforo
+    window.rateCard = function(status, event) {
+      event.stopPropagation(); // Evitar voltear la tarjeta de nuevo
+      
+      // Guardar el estado de la tarjeta (red, yellow, green)
+      currentCards[currentIndex].status = status;
+      saveDecks();
+
+      // Avanzar a la siguiente
+      if (currentIndex < currentCards.length - 1) {
+        currentIndex++;
+        showCard(currentIndex);
+      } else {
+        alert("¡Has terminado este mazo por ahora! Volviendo a tus carpetas.");
+        showDashboard();
+      }
+    };
+  </script>
+</body>
+</html>
